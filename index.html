@@ -1,0 +1,876 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Diagnóstico Financiero</title><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* Layout: selector de mes arriba, resultados fijos, carga por secciones en cascada (ventas → estructura → EBITDA → neto → deuda), vista anual aparte */
+  :root{
+    --bg:#faf7f1; --surface:#ffffff; --surface-2:#f2ede2; --border:#e6dfd0;
+    --ink:#201d16; --ink-soft:#5e5646; --ink-faint:#948c76;
+    --accent:#2c7ba6; --accent-strong:#154f70; --accent-soft:#e9f2f7; --accent-line:#c7dfec;
+    --pos:#2f8a5b; --pos-bg:#e6f4ec; --neg:#bb3d3d; --neg-bg:#f8e4e2; --warn:#a8710c; --warn-bg:#f9edd7;
+    --shadow:0 1px 2px rgba(32,29,22,.05), 0 8px 22px rgba(32,29,22,.07);
+    --font:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+    --bg:#141210; --surface:#1c1a15; --surface-2:#252119; --border:#37311f;
+    --ink:#f1ebdd; --ink-soft:#c7bda3; --ink-faint:#8f866d;
+    --accent:#79bfe3; --accent-strong:#aedcf5; --accent-soft:#193143; --accent-line:#2c5468;
+    --pos:#83d9ab; --pos-bg:#163828; --neg:#ef9090; --neg-bg:#3d1e1d; --warn:#e7bc6a; --warn-bg:#3b2c12;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 26px rgba(0,0,0,.4); color-scheme:dark}}
+  :root[data-theme="dark"]{
+    --bg:#141210; --surface:#1c1a15; --surface-2:#252119; --border:#37311f;
+    --ink:#f1ebdd; --ink-soft:#c7bda3; --ink-faint:#8f866d;
+    --accent:#79bfe3; --accent-strong:#aedcf5; --accent-soft:#193143; --accent-line:#2c5468;
+    --pos:#83d9ab; --pos-bg:#163828; --neg:#ef9090; --neg-bg:#3d1e1d; --warn:#e7bc6a; --warn-bg:#3b2c12;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 26px rgba(0,0,0,.4); color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:30px 80px}
+  h1,h2,h3{margin:0;text-wrap:balance}
+  p{margin:0}
+  button{font:inherit;cursor:pointer}
+  .num,.money{font-variant-numeric:tabular-nums}
+
+  .head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+  h1{font-size:2rem;font-weight:900;letter-spacing:-.02em}
+  .sub{margin-top:4px;color:var(--ink-soft);font-size:.9375rem}
+  .iva{display:inline-block;vertical-align:middle;margin-left:8px;font-size:.8125rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-strong);background:var(--accent-soft);border:1px solid var(--accent-line);padding:4px 10px;border-radius:20px}
+  .tabs{display:inline-flex;background:var(--surface-2);border-radius:12px;padding:4px;gap:4px}
+  .tabs button{border:0;background:transparent;color:var(--ink-soft);font-weight:800;font-size:.875rem;padding:8px 14px;border-radius:9px}
+  .headr{display:flex;flex-wrap:wrap;gap:8px}
+  .viewsw button[aria-pressed="true"]{background:var(--accent);color:var(--surface);box-shadow:var(--shadow)}
+  .ivactl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px;font-size:.75rem;font-weight:700;color:var(--ink-faint)}
+  .ivactl select{font:inherit;font-weight:800;font-size:.75rem;color:var(--accent-strong);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:8px;padding:3px 6px}
+  .ivactl select:disabled{opacity:.5}
+  .tbl.st{min-width:440px}
+  .tbl.st tr.rub td{padding-top:16px;font-weight:900;font-size:.9375rem;color:var(--accent-strong);border-top:2px solid var(--border)}
+  .tbl.st tr.rub td.out{color:var(--ink);font-size:.9375rem}
+  .tbl.st tr.rub:first-child td{border-top:0;padding-top:4px}
+  .tbl.st tr.ln td{border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
+  .tbl.st tr.ln td.lbl{font-weight:500;font-size:.9rem;padding-left:16px;color:var(--ink-soft)}
+  select.rate{font:inherit;font-size:.75rem;font-weight:800;color:var(--accent-strong);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:8px;padding:4px 6px;flex:none}
+  .brush{flex:none;border:0;background:transparent;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;padding:0;opacity:.35}
+  .brush svg{width:14px;height:14px;fill:var(--ink-soft)}
+  tr:hover .brush,.brush:focus-visible{opacity:1}
+  tr.mk-r td{background:var(--neg-bg)} tr.mk-y td{background:var(--warn-bg)}
+  tr.mk-r .brush,tr.mk-y .brush{opacity:1}
+  tr.mk-r .brush svg{fill:var(--neg)} tr.mk-y .brush svg{fill:var(--warn)}
+  .vsw{display:inline-flex;align-items:center;gap:4px;margin-left:auto}
+  .tbl.gt input.n{min-width:0}
+  .tbl.gt td.lbl{font-size:.875rem}
+  .grp .ivactl{margin-top:2px}
+  .vsw span{margin-right:2px}
+  .vsw button{border:1px solid var(--accent-line);background:var(--surface);color:var(--accent-strong);font-weight:800;font-size:.75rem;padding:3px 9px;border-radius:8px}
+  .vsw button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+  .vsw button:disabled{opacity:.4;cursor:default}
+  input.n.ro{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-strong)}
+  .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+  /* meses */
+  .months{margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px;display:grid;gap:10px}
+  .yr{display:flex;align-items:center;gap:8px;font-weight:900;font-size:1.0625rem}
+  .yr button{border:1px solid var(--border);background:var(--surface);color:var(--ink);width:32px;height:32px;border-radius:9px;font-weight:900}
+  .mgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:6px}
+  .mgrid button{position:relative;border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);font-weight:800;font-size:.8125rem;padding:9px 0;border-radius:10px;text-transform:capitalize}
+  .mgrid button.has::after{content:"";position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--pos)}
+  .mgrid button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+  @media (max-width:700px){.mgrid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+
+  /* resultados */
+  .kpis{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+  .kpi{padding:12px 14px;display:grid;gap:1px;min-width:0;border-left:1px solid var(--border)}
+  .kpi:first-child{border-left:0}
+  [hidden]{display:none!important}
+  h1.modes{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline}
+  h1.modes button{border:0;background:transparent;padding:0;font:inherit;color:var(--ink-faint);letter-spacing:inherit}
+  h1.modes button[aria-pressed="true"]{color:var(--ink)}
+  h1.modes button[aria-pressed="false"]{font-size:.6em;font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:5px;text-decoration-color:var(--border)}
+  input.n.auto::placeholder{color:var(--accent-strong);font-weight:700}
+  .eq{grid-column:1/-1;border-top:1px solid var(--border);padding:9px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:.875rem}
+  .eq i{width:1px;height:16px;background:var(--border)}
+  .eqp{display:inline-flex;gap:6px;align-items:baseline;white-space:nowrap}
+  .eql{color:var(--ink-soft);font-weight:700}
+  .eqp b{font-weight:900;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:.6875rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .v{font-size:1.25rem;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .p{font-size:.8125rem;font-weight:700;color:var(--ink-soft)}
+  .kpi.big{background:var(--accent-soft)}
+  @media (max-width:760px){.kpis{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{border-left:0;border-top:1px solid var(--border)}.kpi:first-child{grid-column:1/-1;border-top:0}}
+  .is-neg{color:var(--neg)} .is-pos{color:var(--pos)}
+
+  .bar-tools{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+  .bar-tools .hint{font-size:.8125rem;color:var(--ink-faint)}
+  .btn{border:1px solid var(--border);background:var(--surface);color:var(--ink);font-weight:800;font-size:.8125rem;padding:8px 13px;border-radius:10px}
+  .btn.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+  .btn.ghost{border-style:dashed;color:var(--accent-strong);background:transparent}
+
+  /* secciones */
+  .sec{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px 18px 8px;box-shadow:var(--shadow)}
+  .sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .sec-h h2{font-size:1.125rem;font-weight:900}
+  .sec-h span{font-size:.8125rem;color:var(--ink-faint);font-weight:700}
+  .tbl{width:100%;border-collapse:collapse}
+  .tbl th{font-size:.6875rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);text-align:right;padding:4px 6px 8px}
+  .tbl th:first-child{text-align:left}
+  .tbl td{padding:4px 6px;border-top:1px solid var(--border);vertical-align:middle}
+  .tbl td.lbl{font-weight:600;font-size:.9375rem}
+  .tbl td.out{text-align:right;font-weight:700;font-size:.875rem;white-space:nowrap;color:var(--ink-soft)}
+  .scroll{overflow-x:auto}
+  .chan{min-width:860px}
+  .tbl th.grp2{text-align:center;border-bottom:1px solid var(--border)}
+  .tbl thead tr+tr th:first-child{text-align:right}
+  input.n{width:100%;min-width:90px;text-align:right;font:inherit;font-weight:700;font-size:.9375rem;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:7px 10px}
+  input.n:focus{background:var(--surface);border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+  input.n::placeholder{color:var(--ink-faint);font-weight:500}
+  input.name{width:100%;font:inherit;font-weight:600;font-size:.9375rem;color:var(--ink);background:var(--surface);border:1px dashed var(--accent-line);border-radius:8px;padding:6px 8px}
+  .del{border:0;background:var(--neg-bg);color:var(--neg);width:28px;height:28px;border-radius:8px;font-weight:900;flex:none}
+  .namecell{display:flex;gap:6px;align-items:center}
+  tr.sum td{background:var(--surface-2);font-weight:900}
+  tr.sum td:first-child{border-radius:10px 0 0 10px} tr.sum td:last-child{border-radius:0 10px 10px 0}
+  tr.sum td.out{color:var(--ink);font-size:.9375rem}
+
+  .groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  @media (max-width:760px){.groups{grid-template-columns:1fr}}
+  .grp{border:1px solid var(--border);border-radius:14px;padding:12px 12px 6px;min-width:0}
+  .grp-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+  .grp-h b{font-size:.8125rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-strong)}
+  .grp-h span{font-weight:900;font-size:.9375rem;white-space:nowrap}
+  .grp-h small{font-weight:700;color:var(--ink-faint);margin-left:6px}
+  .line{display:grid;grid-template-columns:minmax(0,1fr) 140px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--border)}
+  .line:first-of-type{border-top:0}
+  .line label{font-size:.9rem;font-weight:600;min-width:0;overflow-wrap:anywhere}
+  .addline{margin:6px 0 8px}
+
+  .result{margin-top:18px;border-radius:16px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent-line)}
+  .result .rl{font-weight:900;font-size:1rem}
+  .result .rl small{display:block;font-weight:600;font-size:.8125rem;color:var(--ink-soft)}
+  .result .rv{font-weight:900;font-size:1.375rem;white-space:nowrap}
+  .result .rv small{font-size:.875rem;font-weight:800;color:var(--ink-soft);margin-left:8px}
+  .result.st-ok{background:var(--pos-bg);border-color:var(--pos)}
+  .result.st-warn{background:var(--warn-bg);border-color:var(--warn)}
+  .result.st-bad{background:var(--neg-bg);border-color:var(--neg)}
+  .badge{display:inline-block;margin-left:8px;vertical-align:2px;font-size:.6875rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:20px;color:var(--surface)}
+  .st-ok .badge{background:var(--pos)} .st-warn .badge{background:var(--warn)} .st-bad .badge{background:var(--neg)}
+  .bite{display:block;font-size:.8125rem;font-weight:700;margin-top:2px}
+  .kpi.st-ok{box-shadow:inset 0 -4px 0 var(--pos)} .kpi.st-warn{box-shadow:inset 0 -4px 0 var(--warn)} .kpi.st-bad{box-shadow:inset 0 -4px 0 var(--neg)}
+  .legend{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.75rem;color:var(--ink-soft)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:0}
+  .note{margin-top:8px;font-size:.8125rem;color:var(--ink-faint);line-height:1.5}
+  .be{margin-top:12px;display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border-radius:12px;padding:12px 14px;font-size:.875rem;color:var(--ink-soft);line-height:1.5}
+  .be b{color:var(--ink)}
+
+  /* anual */
+  .annual{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);overflow-x:auto}
+  .annual table{border-collapse:collapse;width:100%;min-width:1100px;font-size:.8125rem}
+  .annual th,.annual td{padding:7px 9px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+  .annual th:first-child,.annual td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1;font-weight:700}
+  .annual thead th{font-size:.6875rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);background:var(--surface-2)}
+  .annual thead th:first-child{background:var(--surface-2)}
+  .annual thead th button{border:0;background:transparent;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;padding:0;text-decoration:underline dotted}
+  .annual tr.k td{background:var(--surface-2);font-weight:900}
+  .annual tr.k td:first-child{background:var(--surface-2)}
+  .annual tr.pc td{color:var(--ink-faint);font-weight:700;font-size:.75rem}
+  .annual tr.ind td:first-child{padding-left:22px;font-weight:600;color:var(--ink-soft)}
+  .annual td.tot,.annual th.tot{background:var(--accent-soft);font-weight:900}
+  .annual td.empty{color:var(--ink-faint)}
+  .tools-r{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .btn.danger{background:var(--neg);border-color:var(--neg);color:var(--surface)}
+  .confirm{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:.8125rem;font-weight:700;color:var(--ink-soft)}
+  .exp-intro{margin-top:20px;max-width:68ch}
+  .exp-intro h2{font-size:1.375rem;font-weight:900}
+  .exp-intro p{margin-top:8px;color:var(--ink-soft);line-height:1.6}
+  .cascade{margin-top:18px;display:grid;gap:6px}
+  .cs{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 16px}
+  .cs-n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;background:var(--surface-2);color:var(--ink-soft)}
+  .cs-b{display:grid;gap:2px;min-width:0}
+  .cs-b strong{font-size:1rem}
+  .cs-b span{font-size:.875rem;color:var(--ink-soft);line-height:1.5}
+  .cs-b em{font-style:normal;font-weight:800;color:var(--ink)}
+  .cs-v{font-weight:900;font-size:1.125rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .cs.out{margin-left:28px}
+  .cs.out .cs-v{color:var(--ink-soft)}
+  .cs.res.ok{background:var(--pos-bg);border-color:var(--pos)}
+  .cs.res.bad{background:var(--neg-bg);border-color:var(--neg)}
+  .cs.res .cs-n{background:var(--surface);color:var(--ink)}
+  .cs.res.bad .cs-v{color:var(--neg)}
+  @media (max-width:560px){.cs.out{margin-left:0}.cs{grid-template-columns:30px minmax(0,1fr)}.cs-v{grid-column:2}}
+  .exp-read{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 18px;max-width:72ch}
+  .exp-read h3{font-size:1rem;font-weight:900}
+  .exp-read p{margin-top:8px;font-size:.9375rem;color:var(--ink-soft);line-height:1.6}
+  .exp-read b{color:var(--ink)}
+  .exp-sem{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.875rem;color:var(--ink-soft)}
+  .exp-sem>span{display:inline-flex;align-items:center;gap:8px}
+  .pill{display:inline-block;font-size:.6875rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:20px;color:var(--surface)}
+  .pill.ok{background:var(--pos)} .pill.warn{background:var(--warn)} .pill.bad{background:var(--neg)}
+  .sync{font-size:.8125rem;color:var(--ink-faint);margin-top:28px}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1 class="modes"><button data-mode="er" aria-pressed="true">Estado de resultado</button><button data-mode="cf" aria-pressed="false">Cashflow</button><button data-mode="bal" aria-pressed="false">Balance</button></h1>
+      <p class="sub" id="subTitle">Cargá los números del mes. Los resultados se calculan solos.</p>
+    </div>
+    <div class="headr">
+    <div class="tabs bal-only" role="tablist" hidden>
+      <button role="tab" id="bTabMes" aria-selected="true">Cargar mes</button>
+      <button role="tab" id="bTabAnual" aria-selected="false">Vista anual</button>
+    </div>
+    <div class="tabs cf-only" role="tablist" hidden>
+      <button role="tab" id="cfTabMes" aria-selected="true">Cargar mes</button>
+      <button role="tab" id="cfTabAnual" aria-selected="false">Vista anual</button>
+    </div>
+    <div class="tabs viewsw er-only" role="group" aria-label="Ver importes">
+      <button id="vSin" aria-pressed="true">Ver sin IVA</button>
+      <button id="vCon" aria-pressed="false">Ver con IVA</button>
+    </div>
+    <div class="tabs er-only" role="tablist">
+      <button role="tab" id="tabMes" aria-selected="true">Cargar mes</button>
+      <button role="tab" id="tabAnual" aria-selected="false">Vista anual</button>
+      <button role="tab" id="tabExp" aria-selected="false">Cómo se lee</button>
+    </div>
+    </div>
+  </div>
+
+  <div class="months">
+    <div class="yr"><button id="yPrev" aria-label="Año anterior">‹</button><span id="yLbl" class="num"></span><button id="yNext" aria-label="Año siguiente">›</button></div>
+    <div class="mgrid" id="mgrid"></div>
+  </div>
+
+  <div id="viewMes">
+    <div class="kpis" aria-label="Resultados del mes">
+      <div class="kpi big"><span class="l">Ventas</span><span class="v money" id="kVentas">$ 0</span><span class="p" id="kMes">—</span></div>
+      <div class="kpi"><span class="l">Ganancia bruta</span><span class="v money" id="kGB">$ 0</span><span class="p" id="kGBp">—</span></div>
+      <div class="kpi"><span class="l">EBITDA</span><span class="v money" id="kEB">$ 0</span><span class="p" id="kEBp">—</span></div>
+      <div class="kpi"><span class="l">Resultado neto</span><span class="v money" id="kRN">$ 0</span><span class="p" id="kRNp">—</span></div>
+      <div class="kpi"><span class="l">Después de deudas</span><span class="v money" id="kFin">$ 0</span><span class="p" id="kFinp">—</span></div>
+      <div class="eq" id="eqLine"></div>
+    </div>
+
+    <div class="bar-tools">
+<span></span>
+      <span class="tools-r">
+        <span id="clearBox"><button class="btn" id="clearBtn">Limpiar plantilla</button></span>
+        <button class="btn" id="editBtn" aria-pressed="false">Editar conceptos</button>
+      </span>
+    </div>
+
+    <section class="sec">
+      <div class="sec-h"><h2>1 · Ventas vs CMV</h2><span>por canal</span></div>
+      <div class="ivactl" id="chIvaCtl"></div>
+      <div class="scroll">
+        <table class="tbl chan">
+          <thead><tr><th rowspan="2" style="vertical-align:bottom">Canal</th><th colspan="2" class="grp2">Venta</th><th colspan="2" class="grp2">CMV</th><th rowspan="2" style="vertical-align:bottom">Ganancia</th><th rowspan="2" style="vertical-align:bottom">%</th></tr>
+          <tr><th>Sin IVA</th><th>Con IVA</th><th>Sin IVA</th><th>Con IVA</th></tr></thead>
+          <tbody id="chanBody"></tbody>
+        </table>
+      </div>
+      <div id="chanAdd"></div>
+      <div class="result"><div class="rl">Ganancia bruta<small>Ventas − CMV</small></div><div class="rv money" id="rGB">$ 0<small>—</small></div></div>
+      <div class="scroll" style="margin-top:18px"><table class="tbl st" id="ingGroups"></table></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-h"><h2>2 · Estructura y costos</h2><span id="estTot">Total $ 0</span></div>
+      <div class="scroll"><table class="tbl st" id="estGroups"></table></div>
+      <div id="grpAdd"></div>
+      <div class="result"><div class="rl">EBITDA<small>Ganancia bruta + envíos − estructura y costos</small></div><div class="rv money" id="rEB">$ 0<small>—</small></div></div>
+      <div class="be" id="beBox"></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-h"><h2>3 · Financiero e impositivo</h2><span>debajo del EBITDA</span></div>
+      <div class="scroll"><table class="tbl st" id="finGroups"></table></div>
+      <div class="result"><div class="rl">Resultado neto<small>EBITDA − intereses − impuestos</small></div><div class="rv money" id="rRN">$ 0<small>—</small></div></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-h"><h2>4 · Deuda</h2><span>cuotas de capital</span></div>
+      <div class="scroll"><table class="tbl st" id="deuGroups"></table></div>
+      <div class="result"><div class="rl">Lo que queda después de pagar deudas<small>Resultado neto − préstamos y tarjeta</small></div><div class="rv money" id="rFin">$ 0<small>—</small></div></div>
+    </section>
+  </div>
+
+  <div id="viewExp" hidden>
+    <div class="exp-intro">
+      <h2>Cómo se lee un estado de resultado</h2>
+      <p>Es una cascada: arrancás con lo que vendiste y vas restando, etapa por etapa, todo lo que cuesta funcionar. Lo que queda abajo de cada etapa dice si la empresa aguanta hasta ahí. El ejemplo usa <b>$100 de ventas</b> para que sea fácil de leer.</p>
+    </div>
+    <div class="cascade">
+      <div class="cs in"><div class="cs-n">1</div><div class="cs-b"><strong>Ventas</strong><span>Todo lo que se vendió en el mes, por canal.</span></div><div class="cs-v">$ 100</div></div>
+      <div class="cs out"><div class="cs-n">−</div><div class="cs-b"><strong>CMV · costo de mercadería vendida</strong><span>Lo que nos costó la mercadería que vendimos (no la que compramos).</span></div><div class="cs-v">$ 60</div></div>
+      <div class="cs res ok"><div class="cs-n">=</div><div class="cs-b"><strong>Ganancia bruta</strong><span>Lo que deja vender, antes de pagar la empresa. <em>¿Ganamos al vender?</em> Si de $100 quedan $40, la rentabilidad bruta es 40%.</span></div><div class="cs-v">$ 40</div></div>
+      <div class="cs out"><div class="cs-n">2</div><div class="cs-b"><strong>Estructura y costos</strong><span>Lo que cuesta tener la empresa abierta: sueldos, servicios, software, envíos, publicidad, plataformas.</span></div><div class="cs-v">$ 30</div></div>
+      <div class="cs res ok"><div class="cs-n">=</div><div class="cs-b"><strong>EBITDA</strong><span>Lo que gana el negocio en sí, por su operación. <em>¿El negocio funciona?</em> No incluye intereses, impuestos ni deudas.</span></div><div class="cs-v">$ 10</div></div>
+      <div class="cs out"><div class="cs-n">3</div><div class="cs-b"><strong>Intereses e impuestos</strong><span>Lo que cuesta deber plata (intereses) y los impuestos que no son IVA (Ingresos Brutos, cheque).</span></div><div class="cs-v">$ 4</div></div>
+      <div class="cs res ok"><div class="cs-n">=</div><div class="cs-b"><strong>Resultado neto</strong><span>Lo que realmente gana la empresa en el mes. <em>¿Ganamos o perdemos?</em></span></div><div class="cs-v">$ 6</div></div>
+      <div class="cs out"><div class="cs-n">4</div><div class="cs-b"><strong>Deuda</strong><span>Las cuotas de préstamos y tarjeta. No es un gasto, pero sale de la caja.</span></div><div class="cs-v">$ 8</div></div>
+      <div class="cs res bad"><div class="cs-n">=</div><div class="cs-b"><strong>Lo que queda después de deudas</strong><span>Si alcanza para pagar lo que debemos. <em>¿Nos alcanza la plata?</em></span></div><div class="cs-v">−$ 2</div></div>
+    </div>
+    <div class="exp-read">
+      <h3>Qué dice este ejemplo</h3>
+      <p>Vender deja plata (ganancia bruta en verde), el negocio funciona (EBITDA en verde) y la empresa gana (neto en verde). <b>El problema está en la deuda:</b> las cuotas se comen más de lo que la empresa gana. Ahí la plantilla marcaría <span class="pill bad">Falla acá</span>.</p>
+      <p>Este es el tipo de lectura que buscamos en cada mes: no solo si da positivo o negativo, sino <b>en qué etapa se rompe</b>.</p>
+    </div>
+    <div class="exp-sem">
+      <span><span class="pill ok">Bien</span>queda más del 5% de las ventas</span>
+      <span><span class="pill warn">Justo</span>queda entre 0 y 5%</span>
+      <span><span class="pill bad">En rojo</span>da negativo</span>
+    </div>
+    <button class="btn" id="goLoad" style="margin-top:16px">Ir a cargar el mes</button>
+  </div>
+
+  <div id="viewAnual" hidden>
+    <div class="annual"><table id="annualTbl"></table></div>
+    <p class="note">Los importes se muestran según el botón de arriba (sin IVA o con IVA). Tocá el nombre de un mes para ir a cargarlo. Los porcentajes son sobre ventas.</p>
+  </div>
+
+  <div id="cfMes" hidden>
+    <div class="kpis" aria-label="Cashflow del mes">
+      <div class="kpi big"><span class="l">Saldo inicial</span><span class="v money" id="cIni">$ 0</span><span class="p" id="cMes">—</span></div>
+      <div class="kpi"><span class="l">Entradas</span><span class="v money" id="cEnt">$ 0</span><span class="p">lo que entró</span></div>
+      <div class="kpi"><span class="l">Salidas</span><span class="v money" id="cSal">$ 0</span><span class="p">lo que salió</span></div>
+      <div class="kpi"><span class="l">Flujo del mes</span><span class="v money" id="cFlu">$ 0</span><span class="p" id="cFlup">—</span></div>
+      <div class="kpi"><span class="l">Saldo final</span><span class="v money" id="cFin">$ 0</span><span class="p" id="cFinp">—</span></div>
+      <div class="eq" id="cEq"></div>
+    </div>
+    <div class="bar-tools">
+      <span></span>
+      <span class="tools-r">
+        <span id="cfClearBox"><button class="btn" id="cfClearBtn">Limpiar plantilla</button></span>
+        <button class="btn" id="cfEditBtn" aria-pressed="false">Editar conceptos</button>
+      </span>
+    </div>
+    <section class="sec"><div class="sec-h"><h2>1 · Cajas</h2><span>dónde está la plata</span></div>
+      <div class="scroll"><table class="tbl st" id="cfCaja"></table></div>
+      <div class="result"><div class="rl">Saldo inicial<small>Suma de todas las cajas al empezar el mes</small></div><div class="rv money" id="cfRIni">$ 0</div></div>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>2 · Entradas</h2><span>lo que entró</span></div>
+      <div class="scroll"><table class="tbl st" id="cfIn"></table></div>
+      <div class="result"><div class="rl">Total entradas</div><div class="rv money" id="cfRIn">$ 0</div></div>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>3 · Salidas operativas</h2><span>lo que cuesta funcionar</span></div>
+      <div class="scroll"><table class="tbl st" id="cfOp"></table></div>
+      <div class="result" id="cfBoxOp"><div class="rl">Flujo operativo<small>Cobros − salidas operativas</small></div><div class="rv money" id="cfROp">$ 0</div></div>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>4 · Deuda y otras salidas</h2><span>préstamos, tarjetas, inversiones, socios</span></div>
+      <div class="scroll"><table class="tbl st" id="cfOt"></table></div>
+      <div class="result" id="cfBoxFin"><div class="rl">Saldo final<small>Saldo inicial + entradas − salidas</small></div><div class="rv money" id="cfRFin">$ 0</div></div>
+    </section>
+  </div>
+  <div id="bMes" hidden>
+    <div class="kpis" aria-label="Balance al cierre del mes">
+      <div class="kpi big"><span class="l">Activo</span><span class="v money" id="bA">$ 0</span><span class="p" id="bMesLbl">—</span></div>
+      <div class="kpi"><span class="l">Pasivo</span><span class="v money" id="bP">$ 0</span><span class="p" id="bPp">—</span></div>
+      <div class="kpi"><span class="l">Patrimonio neto</span><span class="v money" id="bPN">$ 0</span><span class="p" id="bPNp">—</span></div>
+      <div class="kpi"><span class="l">Liquidez corriente</span><span class="v" id="bLiq">—</span><span class="p" id="bLiqp">—</span></div>
+      <div class="kpi"><span class="l">Capital de trabajo</span><span class="v money" id="bCT">$ 0</span><span class="p" id="bCTp">—</span></div>
+      <div class="eq" id="bEq"></div>
+    </div>
+    <div class="bar-tools">
+      <span></span>
+      <span class="tools-r">
+        <span id="bClearBox"><button class="btn" id="bClearBtn">Limpiar plantilla</button></span>
+        <button class="btn" id="bEditBtn" aria-pressed="false">Editar conceptos</button>
+      </span>
+    </div>
+    <section class="sec"><div class="sec-h"><h2>1 · Activo corriente</h2><span>lo que tiene y se hace plata en menos de un año</span></div>
+      <div class="scroll"><table class="tbl st" id="bAC"></table></div>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>2 · Activo no corriente</h2><span>bienes de uso y largo plazo</span></div>
+      <div class="scroll"><table class="tbl st" id="bANC"></table></div>
+      <div class="result"><div class="rl">Total activo<small>Lo que tiene la empresa</small></div><div class="rv money" id="bRA">$ 0</div></div>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>3 · Pasivo corriente</h2><span>lo que debe pagar en menos de un año</span></div>
+      <div class="scroll"><table class="tbl st" id="bPC"></table></div>
+    </section>
+    <section class="sec"><div class="sec-h"><h2>4 · Pasivo no corriente</h2><span>lo que debe a más de un año</span></div>
+      <div class="scroll"><table class="tbl st" id="bPNC"></table></div>
+      <div class="result"><div class="rl">Total pasivo<small>Lo que debe la empresa</small></div><div class="rv money" id="bRP">$ 0</div></div>
+      <div class="result" id="bBoxPN"><div class="rl">Patrimonio neto<small>Activo − pasivo</small></div><div class="rv money" id="bRPN">$ 0</div></div>
+    </section>
+  </div>
+  <div id="bAnual" hidden>
+    <div class="annual"><table id="bAnnualTbl"></table></div>
+  </div>
+  <div id="cfAnual" hidden>
+    <div class="annual"><table id="cfAnnualTbl"></table></div>
+  </div>
+
+  <p class="sync" id="sync"></p>
+</div>
+
+<script>
+(()=>{"use strict";
+
+const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const G=(id,name,sec,lines)=>({id,name,sec,lines:lines.map((n,i)=>({id:id+"_"+(i+1),name:n}))});
+const DEFAULT_STRUCT={
+  channels:["Mayorista","Minorista / local","Tienda online","Marketplace"].map((n,i)=>({id:"ch"+(i+1),name:n})),
+  groups:[
+    G("sue","Sueldos y personal","est",["Sueldos","Cargas sociales","Obra social y sindicato"]),
+    G("hon","Honorarios profesionales","est",["Contador","Abogado","Sistema de gestión (ERP)","Mantenimiento y reparaciones"]),
+    G("ser","Servicios","est",["Luz","Internet","Telefonía","Agua"]),
+    G("log","Logística y envíos","est",["Envíos","Correo"]),
+    G("seg","Seguros y alarmas","est",["Seguros","Alarma"]),
+    G("com","Combustible y peajes","est",["Combustible y peajes"]),
+    G("sof","Softwares y suscripciones","est",["Software de gestión","Suscripciones"]),
+    G("pap","Insumos y papelería","est",["Insumos y papelería"]),
+    G("pub","Publicidad","est",["Redes sociales","Marketplace"]),
+    G("pla","Plataformas","est",["Comisiones de plataformas"]),
+    G("fin","Costo de deuda","fin",["Intereses financieros"]),
+    G("imp","Impositivo","imp",["Impuestos"]),
+    G("deu","Deuda","deu",["Préstamos","Tarjeta"]),
+    G("env","Ingresos por envíos","ing",["Envíos cobrados"])
+  ]
+};
+let struct=JSON.parse(JSON.stringify(DEFAULT_STRUCT));
+let months={};            // "AAAA-MM" -> {id: number}
+let editing=false;
+let mode="er";try{if(localStorage.getItem("er-mode")==="cf")mode="cf"}catch(e){}
+const IVA_DEF={sue:{r:0,con:false},hon:{r:21,con:true},ser:{r:27,con:true},log:{r:21,con:true},seg:{r:21,con:true},com:{r:21,con:true},sof:{r:21,con:true},pap:{r:21,con:true},pub:{r:21,con:true},pla:{r:21,con:true},fin:{r:0,con:false},imp:{r:0,con:false},deu:{r:0,con:false},env:{r:21,con:true}};
+let view="sin";try{if(localStorage.getItem("er-view")==="con")view="con"}catch(e){}
+function ivaOf(g){const r=g&&g.iva&&typeof g.iva.r==="number"?g.iva.r:(IVA_DEF[g&&g.id]||{r:21}).r;return {r,con:r>0}}
+function chIva(){const r=struct.chIva&&struct.chIva.r>0?struct.chIva.r:21;return {r,con:false}}
+function netoOf(x,iv){const r=iv.r/100;return iv.con&&r?x/(1+r):x}
+function conv(x,iv){const r=iv.r/100;const neto=iv.con&&r?x/(1+r):x;return view==="con"?neto*(1+r):neto}
+const today=new Date();
+let year=today.getFullYear(), month=today.getMonth();
+try{const s=JSON.parse(localStorage.getItem("er-sel")||"null");if(s&&s.y&&s.m!=null){year=s.y;month=s.m}}catch(e){}
+const $=id=>document.getElementById(id);
+const key=()=>`${year}-${String(month+1).padStart(2,"0")}`;
+const cur=()=>months[key()]||(months[key()]={});
+
+/* números */
+const nf=new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
+const nf0=new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
+function money(v,short){if(v==null||isNaN(v))return "—";const s=(short?nf0:nf).format(Math.abs(v));return (v<0?"−$ ":"$ ")+s}
+function pct(v){return v==null||!isFinite(v)?"—":nf.format(Math.round(v*1000)/10)+"%"}
+function parseNum(t){if(t==null)return null;t=String(t).replace(/[$\s]/g,"");if(t===""||t==="-")return null;
+  let neg=t.startsWith("-");t=t.replace(/-/g,"");
+  if(t.includes(",")){t=t.replace(/\./g,"").replace(",",".")}
+  else{const parts=t.split(".");if(parts.length>2||(parts.length===2&&parts[1].length===3))t=parts.join("")}
+  const n=Number(t);return isFinite(n)?(neg?-n:n):null}
+const fmtIn=v=>v==null||v===""?"":nf.format(v);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const val=(m,k)=>{const v=m&&m[k];return typeof v==="number"?v:0};
+
+/* cálculo */
+function calc(m){
+  const r={ch:{},grp:{}};let ven=0,cmv=0;
+  const ci=chIva();
+  struct.channels.forEach(c=>{const v=conv(val(m,c.id+"_v"),ci),k=conv(val(m,c.id+"_c"),ci);ven+=v;cmv+=k;r.ch[c.id]={v,c:k,g:v-k,p:v?(v-k)/v:null}});
+  r.ven=ven;r.cmv=cmv;r.gb=ven-cmv;r.rb=ven?r.gb/ven:null;
+  const sum={est:0,fin:0,imp:0,deu:0,ing:0};
+  struct.groups.forEach(g=>{const iv=ivaOf(g);const t=g.lines.reduce((a,l)=>a+conv(val(m,l.id),iv),0);r.grp[g.id]=t;sum[g.sec]+=t});
+  r.est=sum.est;r.env=sum.ing;r.eb=r.gb+sum.ing-sum.est;r.fin=sum.fin;r.imp=sum.imp;r.rn=r.eb-sum.fin-sum.imp;r.deu=sum.deu;r.final=r.rn-sum.deu;
+  r.be=r.rb&&r.rb>0?Math.max(0,sum.est-sum.ing)/r.rb:null;
+  r.has=m&&Object.values(m).some(v=>typeof v==="number"&&v!==0);
+  return r}
+
+/* armado del formulario */
+function inputHTML(k,b){return `<input class="n" inputmode="decimal" autocomplete="off" id="in-${k}-${b}" data-k="${k}" data-b="${b}" placeholder="0">`}
+const in2=k=>`<td>${inputHTML(k,"sin")}</td><td>${inputHTML(k,"con")}</td>`;
+// cómo se guarda cada campo: canales sin IVA; gastos con IVA (si el rubro lleva)
+function ivFor(k){const ch=struct.channels.find(c=>k===c.id+"_v"||k===c.id+"_c");if(ch)return chIva();const g=struct.groups.find(g=>g.lines.some(l=>l.id===k));return g?ivaOf(g):{r:0,con:false}}
+function asBasis(stored,k,b){if(typeof stored!=="number")return null;const iv=ivFor(k);const n=netoOf(stored,iv);return b==="con"?n*(1+iv.r/100):n}
+function toStored(v,k,b){const iv=ivFor(k);const n=b==="con"?v/(1+iv.r/100):v;return iv.con?n*(1+iv.r/100):n}
+const r2=x=>Math.round(x*100)/100;
+const BRUSH=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9.2 12z"/><path d="M8 13.4 10.6 16c-.3 2.6-2.3 4.6-5.6 5 .6-1 .8-2 .8-3.1 0-2.4 1-4 2.2-4.5z"/></svg>`;
+const MK=["","r","y"];
+function nameHTML(kind,id,name){if(!editing&&(kind==="ch"||kind==="ln"))return `<span class="namecell"><button class="brush" data-mk="${id}" title="Marcar: rojo = revisar · amarillo = falta completar" aria-label="Marcar ${esc(name)}">${BRUSH}</button>${esc(name)}</span>`;return editing?`<span class="namecell"><input class="name" id="nm-${id}" data-kind="${kind}" data-id="${id}" value="${esc(name)}"><button class="del" data-del="${kind}" data-id="${id}" aria-label="Quitar ${esc(name)}">×</button></span>`:esc(name)}
+function ensureIng(){if(!struct.groups.some(g=>g.sec==="ing"))struct.groups.push(JSON.parse(JSON.stringify(DEFAULT_STRUCT.groups.find(g=>g.sec==="ing"))))}
+function build(){
+  ensureIng();
+  $("chanBody").innerHTML=struct.channels.map(c=>`<tr data-row="${c.id}"><td class="lbl">${nameHTML("ch",c.id,c.name)}</td>${in2(c.id+"_v")}${in2(c.id+"_c")}<td class="out money" id="g-${c.id}"></td><td class="out" id="p-${c.id}"></td></tr>`).join("")+
+    `<tr class="sum"><td>Total</td><td class="out money" id="tV"></td><td class="out money" id="tVc"></td><td class="out money" id="tC"></td><td class="out money" id="tCc"></td><td class="out money" id="tG"></td><td class="out" id="tP"></td></tr>`;
+  $("chanAdd").innerHTML=editing?`<button class="btn ghost addline" data-add="ch">+ Agregar canal</button>`:"";
+  const rate=(id,iv,ch)=>editing?`<select class="rate" id="r-${id}" data-iva="${id}" aria-label="IVA">${(ch?[10.5,21,27]:[0,10.5,21,27]).map(x=>`<option value="${x}"${iv.r===x?" selected":""}>${x?"IVA "+String(x).replace(".",",")+"%":"Sin IVA"}</option>`).join("")}</select>`:"";
+  $("chIvaCtl").innerHTML=rate("__ch",chIva(),true);
+  const sec=(list,head)=>`<thead><tr><th>Concepto</th><th style="width:24%">Sin IVA</th><th style="width:24%">Con IVA</th><th style="width:10%">%</th></tr></thead><tbody>`+list.map(g=>`
+    <tr class="rub"><td>${editing?`<span class="namecell"><input class="name" id="nm-${g.id}" data-kind="grp" data-id="${g.id}" value="${esc(g.name)}">${rate(g.id,ivaOf(g))}${g.sec==="est"?`<button class="del" data-del="grp" data-id="${g.id}" aria-label="Quitar rubro">×</button>`:""}</span>`:esc(g.name)}</td><td class="out money" id="gt-${g.id}"></td><td class="out money" id="gc-${g.id}"></td><td class="out" id="gp-${g.id}"></td></tr>
+    ${g.lines.map(l=>`<tr class="ln" data-row="${l.id}"><td class="lbl">${nameHTML("ln",l.id,l.name)}</td>${in2(l.id)}<td></td></tr>`).join("")}
+    ${editing?`<tr><td colspan="4"><button class="btn ghost addline" data-add="ln" data-g="${g.id}">+ Agregar concepto</button></td></tr>`:""}`).join("")+`</tbody>`;
+  $("estGroups").innerHTML=sec(struct.groups.filter(g=>g.sec==="est"),"Importe c/IVA");
+  $("finGroups").innerHTML=sec(struct.groups.filter(g=>g.sec==="fin"||g.sec==="imp"),"Importe");
+  $("ingGroups").innerHTML=sec(struct.groups.filter(g=>g.sec==="ing"),"");
+  $("deuGroups").innerHTML=sec(struct.groups.filter(g=>g.sec==="deu"),"Importe");
+  $("grpAdd").innerHTML=editing?`<button class="btn ghost addline" data-add="grp" style="margin-top:12px">+ Agregar rubro de estructura</button>`:"";
+  fill();
+}
+function paintMarks(){const m=cur();document.querySelectorAll("tr[data-row]").forEach(tr=>{const v=m["mk_"+tr.dataset.row]||"";tr.classList.toggle("mk-r",v==="r");tr.classList.toggle("mk-y",v==="y")})}
+function fill(){
+  const m=cur();paintMarks();
+  document.querySelectorAll("input.n").forEach(i=>{if(document.activeElement!==i){const v=asBasis(m[i.dataset.k],i.dataset.k,i.dataset.b);i.value=v==null?"":fmtIn(r2(v))}});
+  update();
+}
+function setOut(id,v,isMoney=true){const e=$(id);if(!e)return;e.textContent=isMoney?money(v):pct(v);e.classList.toggle("is-neg",isMoney&&v<0)}
+function setRes(id,v,p,extra){const e=$(id);e.innerHTML=`${money(v)}<small>${extra||pct(p)+" de ventas"}</small>`;e.classList.toggle("is-neg",v<0)}
+function update(){
+  const r=calc(cur());
+  {const m=cur();let tv=0,tc=0;
+  struct.channels.forEach(c=>{const v=r.ch[c.id].v,k=r.ch[c.id].c;tv+=v;tc+=k;setOut("g-"+c.id,v||k?v-k:null);$("p-"+c.id).textContent=pct(v?(v-k)/v:null)});
+  {const m2=cur();let a=0,b=0,c2=0,d=0;struct.channels.forEach(c=>{a+=asBasis(m2[c.id+"_v"],c.id+"_v","sin")||0;b+=asBasis(m2[c.id+"_v"],c.id+"_v","con")||0;c2+=asBasis(m2[c.id+"_c"],c.id+"_c","sin")||0;d+=asBasis(m2[c.id+"_c"],c.id+"_c","con")||0});
+  setOut("tV",a);setOut("tVc",b);setOut("tC",c2);setOut("tCc",d);}
+  setOut("tG",tv-tc);$("tP").textContent=pct(tv?(tv-tc)/tv:null);var chGB=tv-tc,chRB=tv?(tv-tc)/tv:null;}
+  {const m=cur();const ci=chIva();const venN=struct.channels.reduce((a,c)=>a+netoOf(val(m,c.id+"_v"),ci),0);
+  struct.groups.forEach(g=>{const iv=ivaOf(g);let tShow=0,tN=0;
+    g.lines.forEach(l=>{const x=val(m,l.id);const n=netoOf(x,iv);tN+=n});tShow=r.grp[g.id];
+    setOut("gt-"+g.id,tN);setOut("gc-"+g.id,tN*(1+iv.r/100));$("gp-"+g.id).textContent=venN?pct(tN/venN):"—"})}
+  $("estTot").textContent="Total "+money(r.est)+(r.ven?" · "+pct(r.est/r.ven)+" de ventas":"");
+  setRes("rGB",r.gb,r.rb,"Rentabilidad bruta "+pct(r.rb));
+  setRes("rEB",r.eb,r.ven?r.eb/r.ven:null);
+  setRes("rRN",r.rn,r.ven?r.rn/r.ven:null,"Rentabilidad neta "+pct(r.ven?r.rn/r.ven:null));
+  setRes("rFin",r.final,r.ven?r.final/r.ven:null);
+  $("beBox").innerHTML=r.be!=null?`<span>Con una rentabilidad bruta de <b>${pct(r.rb)}</b>, para cubrir la estructura de <b>${money(Math.max(0,r.est-r.env),1)}</b> hay que vender <b>${money(r.be,1)}</b> por mes. ${r.ven>=r.be?`Este mes se vendió <b class="is-pos">${money(r.ven-r.be,1)} por encima</b>.`:`Este mes faltaron <b class="is-neg">${money(r.be-r.ven,1)}</b> de ventas.`}</span>`:`<span>Cuando cargues ventas y CMV, acá aparece cuánto hay que vender por mes para cubrir la estructura (punto de equilibrio).</span>`;
+  // semáforo por etapa
+  const stages=[["rGB","kGB",r.gb,null,""],["rEB","kEB",r.eb,r.est,"La estructura se come"],["rRN","kRN",r.rn,r.fin+r.imp,"Intereses e impuestos se comen"],["rFin","kFin",r.final,r.deu,"La deuda se come"]];
+  let prevBad=false;
+  stages.forEach(([rid,kid,v,bite,txt])=>{const box=$(rid).closest(".result");const rl=box.querySelector(".rl");
+    rl.querySelectorAll(".badge,.bite").forEach(x=>x.remove());box.classList.remove("st-ok","st-warn","st-bad");$(kid).closest(".kpi").classList.remove("st-ok","st-warn","st-bad");
+    if(!r.ven)return;
+    const p=v/r.ven;const st=p<0?"bad":p<0.05?"warn":"ok";
+    box.classList.add("st-"+st);$(kid).closest(".kpi").classList.add("st-"+st);
+    const b=document.createElement("span");b.className="badge";b.textContent=st==="ok"?"Bien":st==="warn"?"Justo":(!prevBad?"Falla acá":"En rojo");
+    rl.firstChild.after(b);
+    if(bite!=null){const e=document.createElement("span");e.className="bite";e.textContent=`${txt} ${pct(bite/r.ven)} de las ventas`;rl.appendChild(e)}
+    if(st==="bad")prevBad=true});
+  const K=(id,v,p)=>{$(id).textContent=money(v,1);$(id).classList.toggle("is-neg",v<0);if(p!==undefined)$(id+"p").textContent=p};
+  {const part=(l,v,sign)=>`<span class="eqp"><span class="eql">${l}</span><b class="${v<0?"is-neg":""}">${sign||""}${money(v,1)}</b></span>`;
+   $("eqLine").innerHTML=part("Ventas − CMV =",r.gb)+'<i></i>'+part("Envíos",r.env,"+ ")+'<i></i>'+part("Estructura",r.est,"− ")+'<i></i>'+part("Intereses e impuestos",r.fin+r.imp,"− ")+'<i></i>'+part("Deuda",r.deu,"− ")}
+  K("kVentas",r.ven);$("kMes").textContent=MESES[month]+" "+year+" · "+(view==="con"?"con IVA":"sin IVA");
+  K("kGB",r.gb,"Rent. bruta "+pct(r.rb));K("kEB",r.eb,pct(r.ven?r.eb/r.ven:null)+" de ventas");
+  K("kRN",r.rn,"Rent. neta "+pct(r.ven?r.rn/r.ven:null));K("kFin",r.final,r.final<0?"No alcanza":"Queda en caja");
+  $("kFinp").classList.toggle("is-neg",r.final<0);
+  renderMonths();
+}
+function renderMonths(){
+  $("yLbl").textContent=year;
+  $("mgrid").innerHTML=MESES.map((n,i)=>{const k=`${year}-${String(i+1).padStart(2,"0")}`;let has=false;try{has=mode==="cf"?cfHas(k):mode==="bal"?bHas(k):calc(months[k]).has}catch(e){};
+    return `<button data-m="${i}" aria-pressed="${i===month}" class="${has?"has":""}" title="${n} ${year}">${n.slice(0,3)}</button>`}).join("");
+  $("subTitle").textContent=`Cargando ${MESES[month]} ${year}. Los resultados se calculan solos.`;
+}
+
+/* vista anual */
+function renderAnnual(){
+  const ks=MESES.map((_,i)=>`${year}-${String(i+1).padStart(2,"0")}`);
+  const rs=ks.map(k=>calc(months[k]));const has=rs.map(r=>r.has);
+  const tot={};const T=f=>rs.reduce((a,r,i)=>a+(has[i]?f(r):0),0);
+  const row=(label,f,cls="",isPct=false,pf=null)=>{
+    let cells=rs.map((r,i)=>{if(!has[i])return `<td class="empty">—</td>`;const v=f(r);return `<td class="${!isPct&&v<0?"is-neg":""}">${isPct?pct(v):money(v,1)}</td>`}).join("");
+    let t;if(isPct){t=pf?pf():null}else t=T(f);
+    return `<tr class="${cls}"><td>${label}</td>${cells}<td class="tot ${!isPct&&t<0?"is-neg":""}">${isPct?pct(t):money(t,1)}</td></tr>`};
+  const tv=T(r=>r.ven);
+  let h=`<thead><tr><th>${year}</th>${MESES.map((n,i)=>`<th><button data-goto="${i}">${n.slice(0,3)}</button></th>`).join("")}<th class="tot">Total</th></tr></thead><tbody>`;
+  h+=row("Ventas",r=>r.ven,"k");
+  struct.channels.forEach(c=>h+=row(esc(c.name),r=>r.ch[c.id].v,"ind"));
+  h+=row("CMV",r=>r.cmv);
+  h+=row("Ganancia bruta",r=>r.gb,"k");
+  h+=row("Rentabilidad bruta",r=>r.rb,"pc",true,()=>tv?T(r=>r.gb)/tv:null);
+  h+=row("Ingresos por envíos",r=>r.env);
+  struct.groups.filter(g=>g.sec==="est").forEach(g=>h+=row(esc(g.name),r=>r.grp[g.id],"ind"));
+  h+=row("Estructura y costos",r=>r.est);
+  h+=row("EBITDA",r=>r.eb,"k");
+  h+=row("EBITDA %",r=>r.ven?r.eb/r.ven:null,"pc",true,()=>tv?T(r=>r.eb)/tv:null);
+  h+=row("Intereses financieros",r=>r.fin,"ind");
+  h+=row("Impositivo",r=>r.imp,"ind");
+  h+=row("Resultado neto",r=>r.rn,"k");
+  h+=row("Rentabilidad neta",r=>r.ven?r.rn/r.ven:null,"pc",true,()=>tv?T(r=>r.rn)/tv:null);
+  h+=row("Deuda (capital)",r=>r.deu,"ind");
+  h+=row("Después de deudas",r=>r.final,"k");
+  $("annualTbl").innerHTML=h+"</tbody>";
+}
+
+/* eventos */
+document.addEventListener("input",e=>{const t=e.target;
+  if(t.matches("input.n")){const k=t.dataset.k,b=t.dataset.b;const v=parseNum(t.value);const m=cur();if(v==null)delete m[k];else m[k]=r2(toStored(v,k,b));
+    const o=$(`in-${k}-${b==="sin"?"con":"sin"}`);if(o){const ov=asBasis(m[k],k,o.dataset.b);o.value=ov==null?"":fmtIn(r2(ov))}
+    update();queueMonth(key())}
+  if(t.matches("input.name")){const id=t.dataset.id,kind=t.dataset.kind;
+    if(kind==="ch")struct.channels.find(x=>x.id===id).name=t.value;
+    else if(kind==="grp")struct.groups.find(x=>x.id===id).name=t.value;
+    else struct.groups.forEach(g=>g.lines.forEach(l=>{if(l.id===id)l.name=t.value}));
+    queueStruct()}});
+document.addEventListener("change",e=>{const t=e.target;if(!t.matches("select[data-iva]"))return;
+  const id=t.dataset.iva,r=Number(t.value);
+  if(id==="__ch")struct.chIva={r,con:false};else{const g=struct.groups.find(x=>x.id===id);g.iva={r,con:r>0}}
+  fill();queueStruct();if(!$("viewAnual").hidden)renderAnnual()});
+
+function setView(v){view=v;try{localStorage.setItem("er-view",v)}catch(e){}$("vSin").setAttribute("aria-pressed",v==="sin");$("vCon").setAttribute("aria-pressed",v==="con");update();if(!$("viewAnual").hidden)renderAnnual()}
+document.addEventListener("focusout",e=>{const t=e.target;if(t.matches("input.n")){const v=asBasis(cur()[t.dataset.k],t.dataset.k,t.dataset.b);t.value=v==null?"":fmtIn(r2(v))}});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches("input.n")){e.preventDefault();const all=[...document.querySelectorAll("input.n")];const i=all.indexOf(e.target);if(all[i+1])all[i+1].focus()}});
+document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.mk){const m=cur(),k="mk_"+b.dataset.mk;const nx=MK[(MK.indexOf(m[k]||"")+1)%MK.length];if(nx)m[k]=nx;else delete m[k];paintMarks();queueMonth(key());return}
+  if(b.dataset.m!=null){month=+b.dataset.m;selChanged();fill();cfRender();return}
+  if(b.dataset.goto!=null){month=+b.dataset.goto;selChanged();showTab("mes");fill();return}
+  if(b.dataset.add){const nid=p=>p+Math.random().toString(36).slice(2,8);
+    if(b.dataset.add==="ch")struct.channels.push({id:nid("ch"),name:"Nuevo canal"});
+    else if(b.dataset.add==="grp")struct.groups.splice(struct.groups.findIndex(g=>g.sec!=="est"),0,{id:nid("g"),name:"Nuevo rubro",sec:"est",iva:{r:21,con:true},lines:[{id:nid("l"),name:"Nuevo concepto"}]});
+    else struct.groups.find(g=>g.id===b.dataset.g).lines.push({id:nid("l"),name:"Nuevo concepto"});
+    build();queueStruct();return}
+  if(b.dataset.del){const id=b.dataset.id,k=b.dataset.del;
+    if(k==="ch")struct.channels=struct.channels.filter(x=>x.id!==id);
+    else if(k==="grp")struct.groups=struct.groups.filter(x=>x.id!==id);
+    else struct.groups.forEach(g=>g.lines=g.lines.filter(l=>l.id!==id));
+    build();queueStruct();return}});
+$("editBtn").addEventListener("click",()=>{editing=!editing;$("editBtn").classList.toggle("on",editing);$("editBtn").setAttribute("aria-pressed",editing);$("editBtn").textContent=editing?"Listo":"Editar conceptos";build()});
+$("yPrev").addEventListener("click",()=>{year--;selChanged();fill();if(!$("viewAnual").hidden)renderAnnual();cfRender()});
+$("yNext").addEventListener("click",()=>{year++;selChanged();fill();if(!$("viewAnual").hidden)renderAnnual();cfRender()});
+function selChanged(){if($("clearYes"))clearIdle();try{localStorage.setItem("er-sel",JSON.stringify({y:year,m:month}))}catch(e){}}
+function showTab(t){$("viewMes").hidden=t!=="mes";$("viewAnual").hidden=t!=="anual";$("viewExp").hidden=t!=="exp";
+  $("tabMes").setAttribute("aria-selected",t==="mes");$("tabAnual").setAttribute("aria-selected",t==="anual");$("tabExp").setAttribute("aria-selected",t==="exp");
+  document.querySelector(".months").hidden=t==="exp";if(t==="anual")renderAnnual()}
+$("tabExp").addEventListener("click",()=>showTab("exp"));
+$("goLoad").addEventListener("click",()=>{showTab("mes");window.scrollTo(0,0)});
+function clearIdle(){$("clearBox").innerHTML=`<button class="btn" id="clearBtn">Limpiar plantilla</button>`}
+$("clearBox").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.id==="clearBtn"){$("clearBox").innerHTML=`<span class="confirm">¿Borrar los números de ${MESES[month]} ${year}?<button class="btn danger" id="clearYes">Sí, borrar</button><button class="btn" id="clearNo">Cancelar</button></span>`;return}
+  if(b.id==="clearNo"){clearIdle();return}
+  if(b.id==="clearYes"){const k=key();months[k]={};clearIdle();fill();queueMonth(k)}});
+$("tabMes").addEventListener("click",()=>showTab("mes"));
+$("vSin").addEventListener("click",()=>setView("sin"));$("vCon").addEventListener("click",()=>setView("con"));
+$("tabAnual").addEventListener("click",()=>showTab("anual"));
+
+/* guardado: en el navegador (localStorage) */
+const timers={};
+const setSync=t=>$("sync").textContent=t;
+function local(){try{localStorage.setItem("er-data",JSON.stringify({struct,months}))}catch(e){}}
+function queueMonth(k){local()}
+function queueStruct(){local()}
+try{const s=JSON.parse(localStorage.getItem("er-data")||"null");if(s){if(s.struct&&s.struct.channels)struct=s.struct;if(s.months)months=s.months}}catch(e){}
+build();setView(view);
+setSync("Los datos se guardan en este navegador.");
+
+/* ===================== CASHFLOW ===================== */
+let cfEditing=false,cfTab="mes";
+let cfMonths={};
+function cfDefault(){
+  const L=(p,arr)=>arr.map((n,i)=>({id:p+"_"+(i+1),name:n}));
+  const est=struct.groups.filter(g=>g.sec==="est").map(g=>({id:"cf"+g.id,name:g.name,sec:"op",lines:g.lines.map(l=>({id:"cf"+l.id,name:l.name}))}));
+  return {groups:[
+    {id:"cban",name:"Bancos",sec:"caja",lines:L("cban",["Banco"])},
+    {id:"cbil",name:"Billeteras y plataformas",sec:"caja",lines:L("cbil",["Billetera virtual"])},
+    {id:"cefe",name:"Efectivo",sec:"caja",lines:L("cefe",["Caja"])},
+    {id:"cinv",name:"Inversiones",sec:"caja",lines:L("cinv",["Plazo fijo / FCI"])},
+    {id:"icob",name:"Cobros por ventas",sec:"in",lines:struct.channels.map(c=>({id:"cf"+c.id,name:c.name}))},
+    {id:"ienv",name:"Cobros por envíos",sec:"in",lines:L("ienv",["Envíos cobrados"])},
+    {id:"iotr",name:"Otras entradas",sec:"in2",lines:L("iotr",["Préstamos recibidos","Aportes de socios","Otros cobros"])},
+    {id:"oprv",name:"Proveedores de mercadería",sec:"op",lines:L("oprv",["Proveedores"])},
+    ...est,
+    {id:"oimp",name:"Impuestos",sec:"op",lines:L("oimp",["IVA","Ingresos Brutos","Ganancias y anticipos","Planes de pago ARCA"])},
+    {id:"fpre",name:"Préstamos",sec:"fin",lines:L("fpre",["Cuota préstamo"])},
+    {id:"ftar",name:"Tarjetas",sec:"fin",lines:L("ftar",["Tarjeta"])},
+    {id:"xinv",name:"Inversiones",sec:"otr",lines:L("xinv",["Bienes de uso"])},
+    {id:"xsoc",name:"Socios",sec:"otr",lines:L("xsoc",["Retiros de socios"])}
+  ]}}
+let cfStruct=null;
+const cfKey=(y,m)=>`${y}-${String(m+1).padStart(2,"0")}`;
+const cfCur=()=>cfMonths[key()]||(cfMonths[key()]={});
+function prevKey(){let y=year,m=month-1;if(m<0){m=11;y--}return cfKey(y,m)}
+function cfIniOf(k,lid){const m=cfMonths[k]||{};if(typeof m["ini_"+lid]==="number")return m["ini_"+lid];
+  const [y,mm]=k.split("-").map(Number);let py=y,pm=mm-2;if(pm<0){pm=11;py--}const pv=cfMonths[cfKey(py,pm)]||{};return typeof pv["fin_"+lid]==="number"?pv["fin_"+lid]:0}
+function cfCalc(k){
+  const m=cfMonths[k]||{};const r={g:{},ini:0,finReal:0,hasReal:false};const sum={in:0,in2:0,op:0,fin:0,otr:0};
+  cfStruct.groups.forEach(g=>{if(g.sec==="caja"){g.lines.forEach(l=>{r.ini+=cfIniOf(k,l.id);if(typeof m["fin_"+l.id]==="number"){r.finReal+=m["fin_"+l.id];r.hasReal=true}});return}
+    const t=g.lines.reduce((a,l)=>a+(typeof m[l.id]==="number"?m[l.id]:0),0);r.g[g.id]=t;sum[g.sec]+=t});
+  r.inOp=sum.in;r.ent=sum.in+sum.in2;r.op=sum.op;r.fin=sum.fin;r.otr=sum.otr;r.sal=sum.op+sum.fin+sum.otr;
+  r.flujoOp=sum.in-sum.op;r.flujo=r.ent-r.sal;r.finCalc=r.ini+r.flujo;r.dif=r.hasReal?r.finReal-r.finCalc:null;
+  return r}
+function cfHas(k){const m=cfMonths[k];return !!m&&Object.entries(m).some(([a,v])=>typeof v==="number"&&v!==0)}
+function cfName(kind,id,name){
+  if(cfEditing)return `<span class="namecell"><input class="name cfname" id="cnm-${id}" data-kind="${kind}" data-id="${id}" value="${esc(name)}"><button class="del" data-cfdel="${kind}" data-id="${id}" aria-label="Quitar ${esc(name)}">×</button></span>`;
+  if(kind==="ln")return `<span class="namecell"><button class="brush" data-cfmk="${id}" title="Marcar: rojo = revisar · amarillo = falta completar" aria-label="Marcar ${esc(name)}">${BRUSH}</button>${esc(name)}</span>`;
+  return esc(name)}
+const cfIn=(k,ph)=>`<input class="n cfn" inputmode="decimal" autocomplete="off" id="cin-${k}" data-ck="${k}" placeholder="${ph||0}">`;
+function cfTable(secs,cols){
+  const list=cfStruct.groups.filter(g=>secs.includes(g.sec));
+  return `<thead><tr><th>Concepto</th>${cols.map(c=>`<th style="width:26%">${c}</th>`).join("")}${cols.length===1?`<th style="width:10%">%</th>`:""}</tr></thead><tbody>`+list.map(g=>`
+    <tr class="rub"><td>${cfName("grp",g.id,g.name)}</td>${cols.length===1?`<td class="out money" id="cgt-${g.id}"></td><td class="out" id="cgp-${g.id}"></td>`:`<td class="out money" id="cgi-${g.id}"></td><td class="out money" id="cgf-${g.id}"></td>`}</tr>
+    ${g.lines.map(l=>`<tr class="ln" data-cfrow="${l.id}"><td class="lbl">${cfName("ln",l.id,l.name)}</td>${cols.length===1?`<td>${cfIn(l.id)}</td><td></td>`:`<td>${cfIn("ini_"+l.id)}</td><td>${cfIn("fin_"+l.id)}</td>`}</tr>`).join("")}
+    ${cfEditing?`<tr><td colspan="3"><button class="btn ghost addline" data-cfadd="ln" data-g="${g.id}">+ Agregar concepto</button></td></tr>`:""}`).join("")+
+    (cfEditing?`<tr><td colspan="3"><button class="btn ghost addline" data-cfadd="grp" data-sec="${secs[0]}">+ Agregar rubro</button></td></tr>`:"")+`</tbody>`}
+function cfBuild(){
+  if(!cfStruct)cfStruct=cfDefault();
+  $("cfCaja").innerHTML=cfTable(["caja"],["Saldo inicial","Saldo final real"]);
+  $("cfIn").innerHTML=cfTable(["in","in2"],["Importe"]);
+  $("cfOp").innerHTML=cfTable(["op"],["Importe"]);
+  $("cfOt").innerHTML=cfTable(["fin","otr"],["Importe"]);
+  cfFill()}
+function cfFill(){
+  const k=key(),m=cfCur();
+  document.querySelectorAll("input.cfn").forEach(i=>{const ck=i.dataset.ck;
+    if(ck.startsWith("ini_")){const own=m[ck];const auto=cfIniOf(k,ck.slice(4));i.classList.toggle("auto",typeof own!=="number"&&auto!==0);i.placeholder=typeof own!=="number"&&auto?fmtIn(auto):"0"}
+    if(document.activeElement!==i)i.value=typeof m[ck]==="number"?fmtIn(m[ck]):""});
+  document.querySelectorAll("tr[data-cfrow]").forEach(tr=>{const v=m["mk_"+tr.dataset.cfrow]||"";tr.classList.toggle("mk-r",v==="r");tr.classList.toggle("mk-y",v==="y")});
+  cfUpdate()}
+function cfUpdate(){
+  const k=key(),r=cfCalc(k),m=cfCur();
+  cfStruct.groups.forEach(g=>{if(g.sec==="caja"){let a=0,b=0;g.lines.forEach(l=>{a+=cfIniOf(k,l.id);b+=typeof m["fin_"+l.id]==="number"?m["fin_"+l.id]:0});setOut("cgi-"+g.id,a);setOut("cgf-"+g.id,b);return}
+    setOut("cgt-"+g.id,r.g[g.id]);const base=g.sec==="in"||g.sec==="in2"?r.ent:r.sal;$("cgp-"+g.id).textContent=base?pct(r.g[g.id]/base):"—"});
+  const box=(id,v,boxId)=>{const e=$(id);e.textContent=money(v);e.classList.toggle("is-neg",v<0);if(boxId){const bx=$(boxId);bx.classList.remove("st-ok","st-bad");if(r.ent||r.sal)bx.classList.add(v<0?"st-bad":"st-ok")}};
+  box("cfRIni",r.ini);box("cfRIn",r.ent);box("cfROp",r.flujoOp,"cfBoxOp");box("cfRFin",r.finCalc,"cfBoxFin");
+  if(r.dif!=null){$("cfRFin").innerHTML=`${money(r.finCalc)}<small>Real ${money(r.finReal,1)} · diferencia ${money(r.dif,1)}</small>`}
+  const K=(id,v)=>{$(id).textContent=money(v,1);$(id).classList.toggle("is-neg",v<0)};
+  K("cIni",r.ini);K("cEnt",r.ent);K("cSal",r.sal);K("cFlu",r.flujo);K("cFin",r.finCalc);
+  $("cMes").textContent=MESES[month]+" "+year+" · con IVA";
+  $("cFlup").textContent=r.flujo<0?"Salió más de lo que entró":"Entró más de lo que salió";$("cFlup").classList.toggle("is-neg",r.flujo<0);
+  $("cFinp").textContent=r.dif!=null?(Math.abs(r.dif)<1?"Coincide con lo real":"Diferencia con lo real "+money(r.dif,1)):"Calculado";
+  $("cFinp").classList.toggle("is-neg",r.dif!=null&&Math.abs(r.dif)>=1);
+  const st=(id,v)=>{const e=$(id).closest(".kpi");e.classList.remove("st-ok","st-bad");if(r.ent||r.sal)e.classList.add(v<0?"st-bad":"st-ok")};st("cFlu",r.flujo);st("cFin",r.finCalc);
+  const part=(l,v,sign)=>`<span class="eqp"><span class="eql">${l}</span><b class="${v<0?"is-neg":""}">${sign||""}${money(v,1)}</b></span>`;
+  $("cEq").innerHTML=part("Entradas",r.ent)+'<i></i>'+part("Operativas",r.op,"− ")+'<i></i>'+part("Deuda",r.fin,"− ")+'<i></i>'+part("Otras",r.otr,"− ")+'<i></i>'+part("Flujo =",r.flujo);
+  if(mode==="cf")renderMonths()}
+function cfRenderAnnual(){
+  const ks=MESES.map((_,i)=>cfKey(year,i));const rs=ks.map(k=>cfCalc(k));const has=ks.map(cfHas);
+  const row=(label,f,cls="",sumUp=true)=>{const cells=rs.map((r,i)=>has[i]?`<td class="${f(r)<0?"is-neg":""}">${money(f(r),1)}</td>`:`<td class="empty">—</td>`).join("");
+    let t=null;if(sumUp)t=rs.reduce((a,r,i)=>a+(has[i]?f(r):0),0);
+    return `<tr class="${cls}"><td>${label}</td>${cells}<td class="tot ${t<0?"is-neg":""}">${t==null?"":money(t,1)}</td></tr>`};
+  let h=`<thead><tr><th>${year}</th>${MESES.map((n,i)=>`<th><button data-cfgoto="${i}">${n.slice(0,3)}</button></th>`).join("")}<th class="tot">Total</th></tr></thead><tbody>`;
+  h+=row("Saldo inicial",r=>r.ini,"k",false);
+  cfStruct.groups.filter(g=>g.sec==="in"||g.sec==="in2").forEach(g=>h+=row(esc(g.name),r=>r.g[g.id],"ind"));
+  h+=row("Total entradas",r=>r.ent,"k");
+  cfStruct.groups.filter(g=>["op","fin","otr"].includes(g.sec)).forEach(g=>h+=row(esc(g.name),r=>r.g[g.id],"ind"));
+  h+=row("Total salidas",r=>r.sal,"k");
+  h+=row("Flujo operativo",r=>r.flujoOp);
+  h+=row("Flujo del mes",r=>r.flujo,"k");
+  h+=row("Saldo final",r=>r.finCalc,"k",false);
+  $("cfAnnualTbl").innerHTML=h+"</tbody>"}
+function cfRender(){if(mode==="bal")return bRender();if(mode!=="cf")return;if(cfTab==="anual")cfRenderAnnual();else cfFill()}
+function setMode(md){mode=md;try{localStorage.setItem("er-mode",md)}catch(e){}
+  document.querySelectorAll("h1.modes button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===md));
+  [["er-only","er"],["cf-only","cf"],["bal-only","bal"]].forEach(([c,m])=>document.querySelectorAll("."+c).forEach(e=>e.hidden=md!==m));
+  ["viewMes","viewAnual","viewExp","cfMes","cfAnual","bMes","bAnual"].forEach(id=>$(id).hidden=true);
+  document.querySelector(".months").hidden=false;
+  if(md==="cf")cfShowTab(cfTab);else if(md==="bal")bShowTab(bTab);else{showTab("mes");update()}
+  renderMonths()}
+function cfShowTab(t){cfTab=t;$("cfMes").hidden=t!=="mes";$("cfAnual").hidden=t!=="anual";$("cfTabMes").setAttribute("aria-selected",t==="mes");$("cfTabAnual").setAttribute("aria-selected",t==="anual");cfRender()}
+$("cfTabMes").addEventListener("click",()=>cfShowTab("mes"));
+$("cfTabAnual").addEventListener("click",()=>cfShowTab("anual"));
+document.querySelector("h1.modes").addEventListener("click",e=>{const b=e.target.closest("button[data-mode]");if(b)setMode(b.dataset.mode)});
+document.addEventListener("input",e=>{const t=e.target;
+  if(t.matches("input.cfn")){const ck=t.dataset.ck,v=parseNum(t.value),m=cfCur();if(v==null)delete m[ck];else m[ck]=r2(v);cfUpdate();cfQueueMonth(key())}
+  if(t.matches("input.cfname")){const id=t.dataset.id;cfStruct.groups.forEach(g=>{if(g.id===id)g.name=t.value;g.lines.forEach(l=>{if(l.id===id)l.name=t.value})});cfQueueStruct()}});
+document.addEventListener("focusout",e=>{const t=e.target;if(t.matches("input.cfn")){const v=cfCur()[t.dataset.ck];t.value=typeof v==="number"?fmtIn(v):""}});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches("input.cfn")){e.preventDefault();const all=[...document.querySelectorAll("input.cfn")];const i=all.indexOf(e.target);if(all[i+1])all[i+1].focus()}});
+document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.cfmk){const m=cfCur(),k="mk_"+b.dataset.cfmk;const nx=MK[(MK.indexOf(m[k]||"")+1)%MK.length];if(nx)m[k]=nx;else delete m[k];cfFill();cfQueueMonth(key());return}
+  if(b.dataset.cfgoto!=null){month=+b.dataset.cfgoto;selChanged();cfShowTab("mes");return}
+  if(b.dataset.cfadd){const nid=p=>p+Math.random().toString(36).slice(2,8);
+    if(b.dataset.cfadd==="grp"){const sec=b.dataset.sec;let idx=-1;cfStruct.groups.forEach((g,i)=>{if(g.sec===sec||(sec==="in"&&g.sec==="in2")||(sec==="fin"&&g.sec==="otr"))idx=i});cfStruct.groups.splice(idx+1,0,{id:nid("cg"),name:"Nuevo rubro",sec,lines:[{id:nid("cl"),name:"Nuevo concepto"}]})}
+    else cfStruct.groups.find(g=>g.id===b.dataset.g).lines.push({id:nid("cl"),name:"Nuevo concepto"});
+    cfBuild();cfQueueStruct();return}
+  if(b.dataset.cfdel){const id=b.dataset.id;if(b.dataset.cfdel==="grp")cfStruct.groups=cfStruct.groups.filter(g=>g.id!==id);else cfStruct.groups.forEach(g=>g.lines=g.lines.filter(l=>l.id!==id));cfBuild();cfQueueStruct();return}});
+$("cfEditBtn").addEventListener("click",()=>{cfEditing=!cfEditing;$("cfEditBtn").classList.toggle("on",cfEditing);$("cfEditBtn").textContent=cfEditing?"Listo":"Editar conceptos";cfBuild()});
+function cfClearIdle(){$("cfClearBox").innerHTML=`<button class="btn" id="cfClearBtn">Limpiar plantilla</button>`}
+$("cfClearBox").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.id==="cfClearBtn"){$("cfClearBox").innerHTML=`<span class="confirm">¿Borrar los números de ${MESES[month]} ${year}?<button class="btn danger" id="cfClearYes">Sí, borrar</button><button class="btn" id="cfClearNo">Cancelar</button></span>`;return}
+  if(b.id==="cfClearNo"){cfClearIdle();return}
+  if(b.id==="cfClearYes"){const k=key();cfMonths[k]={};cfClearIdle();cfFill();cfQueueMonth(k)}});
+function cfLocal(){try{localStorage.setItem("cf-data",JSON.stringify({cfStruct,cfMonths}))}catch(e){}}
+function cfQueueMonth(k){cfLocal()}
+function cfQueueStruct(){cfLocal()}
+try{const s=JSON.parse(localStorage.getItem("cf-data")||"null");if(s){if(s.cfStruct&&Array.isArray(s.cfStruct.groups))cfStruct=s.cfStruct;if(s.cfMonths)cfMonths=s.cfMonths}}catch(e){}
+cfBuild();
+
+/* ===================== BALANCE ===================== */
+let bEditing=false,bTab="mes",bMonths={},bStruct=null;
+function bDefault(){const L=(p,arr)=>arr.map((n,i)=>({id:p+"_"+(i+1),name:n}));return {groups:[
+  {id:"bdis",name:"Disponibilidades",sec:"ac",lines:[{id:"bdis_auto",name:"Caja y bancos"}]},
+  {id:"bcre",name:"Créditos por ventas",sec:"ac",lines:L("bcre",["Clientes","Dinero a liberar en plataformas de pago","Cheques en cartera"])},
+  {id:"bfis",name:"Créditos fiscales",sec:"ac",lines:L("bfis",["Saldo a favor IVA","Retenciones y percepciones"])},
+  {id:"bsto",name:"Bienes de cambio",sec:"ac",lines:L("bsto",["Stock de mercadería"])},
+  {id:"botr",name:"Otros créditos",sec:"ac",lines:L("botr",["Anticipos a proveedores"])},
+  {id:"buso",name:"Bienes de uso",sec:"anc",lines:L("buso",["Rodados","Equipos e instalaciones","Mejoras"])},
+  {id:"pcom",name:"Deudas comerciales",sec:"pc",lines:L("pcom",["Proveedores","Cheques emitidos pendientes"])},
+  {id:"pfis",name:"Deudas fiscales",sec:"pc",lines:L("pfis",["IVA a pagar","Ingresos Brutos a pagar","Planes de pago ARCA (próximos 12 meses)"])},
+  {id:"psoc",name:"Deudas sociales",sec:"pc",lines:L("psoc",["Sueldos a pagar","Cargas sociales a pagar"])},
+  {id:"pfin",name:"Deudas financieras",sec:"pc",lines:L("pfin",["Préstamos (próximos 12 meses)","Tarjetas","Descubierto"])},
+  {id:"plfin",name:"Deudas financieras",sec:"pnc",lines:L("plfin",["Préstamos (más de 12 meses)"])},
+  {id:"plfis",name:"Deudas fiscales",sec:"pnc",lines:L("plfis",["Planes de pago ARCA (más de 12 meses)"])}
+]}}
+const bCur=()=>bMonths[key()]||(bMonths[key()]={});
+function bAuto(k){const m=cfMonths[k];if(!m||!cfStruct)return null;let t=0,has=false;cfStruct.groups.filter(g=>g.sec==="caja").forEach(g=>g.lines.forEach(l=>{if(typeof m["fin_"+l.id]==="number"){t+=m["fin_"+l.id];has=true}}));return has?t:null}
+function bVal(k,m,lid){if(typeof m[lid]==="number")return m[lid];if(lid==="bdis_auto"){const a=bAuto(k);return a==null?0:a}return 0}
+function bCalc(k){const m=bMonths[k]||{};const r={g:{}};const sum={ac:0,anc:0,pc:0,pnc:0};
+  bStruct.groups.forEach(g=>{const t=g.lines.reduce((a,l)=>a+bVal(k,m,l.id),0);r.g[g.id]=t;sum[g.sec]+=t});
+  Object.assign(r,sum);r.A=sum.ac+sum.anc;r.P=sum.pc+sum.pnc;r.PN=r.A-r.P;r.liq=sum.pc?sum.ac/sum.pc:null;r.ct=sum.ac-sum.pc;r.end=r.A?r.P/r.A:null;return r}
+function bHas(k){const m=bMonths[k];return (!!m&&Object.values(m).some(v=>typeof v==="number"&&v!==0))||bAuto(k)!=null}
+function bName(kind,id,name){
+  if(bEditing)return `<span class="namecell"><input class="name bname" id="bnm-${id}" data-kind="${kind}" data-id="${id}" value="${esc(name)}"><button class="del" data-bdel="${kind}" data-id="${id}" aria-label="Quitar ${esc(name)}">×</button></span>`;
+  if(kind==="ln")return `<span class="namecell"><button class="brush" data-bmk="${id}" title="Marcar: rojo = revisar · amarillo = falta completar" aria-label="Marcar ${esc(name)}">${BRUSH}</button>${esc(name)}</span>`;
+  return esc(name)}
+function bTable(sec){const list=bStruct.groups.filter(g=>g.sec===sec);
+  return `<thead><tr><th>Concepto</th><th style="width:30%">Saldo al cierre</th><th style="width:10%">%</th></tr></thead><tbody>`+list.map(g=>`
+    <tr class="rub"><td>${bName("grp",g.id,g.name)}</td><td class="out money" id="bgt-${g.id}"></td><td class="out" id="bgp-${g.id}"></td></tr>
+    ${g.lines.map(l=>`<tr class="ln" data-brow="${l.id}"><td class="lbl">${bName("ln",l.id,l.name)}</td><td><input class="n bn" inputmode="decimal" autocomplete="off" id="bin-${l.id}" data-bk="${l.id}" placeholder="0"></td><td></td></tr>`).join("")}
+    ${bEditing?`<tr><td colspan="3"><button class="btn ghost addline" data-badd="ln" data-g="${g.id}">+ Agregar concepto</button></td></tr>`:""}`).join("")+
+    (bEditing?`<tr><td colspan="3"><button class="btn ghost addline" data-badd="grp" data-sec="${sec}">+ Agregar rubro</button></td></tr>`:"")+`</tbody>`}
+function bBuild(){if(!bStruct)bStruct=bDefault();["ac","anc","pc","pnc"].forEach(sec=>$({ac:"bAC",anc:"bANC",pc:"bPC",pnc:"bPNC"}[sec]).innerHTML=bTable(sec));bFill()}
+function bFill(){const k=key(),m=bCur();
+  document.querySelectorAll("input.bn").forEach(i=>{const lk=i.dataset.bk;
+    if(lk==="bdis_auto"){const a=bAuto(k);i.classList.toggle("auto",typeof m[lk]!=="number"&&a!=null);i.placeholder=a!=null?fmtIn(a):"0";i.title=a!=null?"Sale del saldo final real del cashflow":""}
+    if(document.activeElement!==i)i.value=typeof m[lk]==="number"?fmtIn(m[lk]):""});
+  document.querySelectorAll("tr[data-brow]").forEach(tr=>{const v=m["mk_"+tr.dataset.brow]||"";tr.classList.toggle("mk-r",v==="r");tr.classList.toggle("mk-y",v==="y")});
+  bUpdate()}
+function bUpdate(){const k=key(),r=bCalc(k);
+  bStruct.groups.forEach(g=>{setOut("bgt-"+g.id,r.g[g.id]);const base=g.sec==="ac"||g.sec==="anc"?r.A:r.P;$("bgp-"+g.id).textContent=base?pct(r.g[g.id]/base):"—"});
+  const v=(id,x)=>{const e=$(id);e.textContent=money(x);e.classList.toggle("is-neg",x<0)};
+  v("bRA",r.A);v("bRP",r.P);v("bRPN",r.PN);
+  const any=r.A||r.P;const bx=$("bBoxPN");bx.classList.remove("st-ok","st-warn","st-bad");if(any)bx.classList.add(r.PN<0?"st-bad":"st-ok");
+  const K=(id,x)=>{$(id).textContent=money(x,1);$(id).classList.toggle("is-neg",x<0)};
+  K("bA",r.A);K("bP",r.P);K("bPN",r.PN);K("bCT",r.ct);
+  $("bMesLbl").textContent="al cierre de "+MESES[month]+" "+year;
+  $("bPp").textContent=r.end!=null?pct(r.end)+" del activo":"—";
+  $("bPNp").textContent=r.PN<0?"Debe más de lo que tiene":"Lo que es de los dueños";$("bPNp").classList.toggle("is-neg",r.PN<0);
+  $("bLiq").textContent=r.liq!=null?nf.format(Math.round(r.liq*100)/100):"—";
+  $("bLiqp").textContent=r.liq==null?"—":r.liq<1?"No alcanza para lo de corto plazo":r.liq<1.5?"Justo":"Cubre lo de corto plazo";
+  $("bLiqp").classList.toggle("is-neg",r.liq!=null&&r.liq<1);
+  $("bCTp").textContent=r.ct<0?"Falta para el corto plazo":"Sobra para el corto plazo";$("bCTp").classList.toggle("is-neg",r.ct<0);
+  const st=(id,s)=>{const e=$(id).closest(".kpi");e.classList.remove("st-ok","st-warn","st-bad");if(any&&s)e.classList.add("st-"+s)};
+  st("bPN",r.PN<0?"bad":"ok");st("bLiq",r.liq==null?null:r.liq<1?"bad":r.liq<1.5?"warn":"ok");st("bCT",r.ct<0?"bad":"ok");
+  const part=(l,x,sign)=>`<span class="eqp"><span class="eql">${l}</span><b class="${x<0?"is-neg":""}">${sign||""}${money(x,1)}</b></span>`;
+  $("bEq").innerHTML=part("Activo corriente",r.ac)+part("− Pasivo corriente",r.pc)+part("= Capital de trabajo",r.ct)+'<i></i>'+part("Activo",r.A)+part("− Pasivo",r.P)+part("= Patrimonio neto",r.PN);
+  if(mode==="bal")renderMonths()}
+function bRenderAnnual(){const ks=MESES.map((_,i)=>`${year}-${String(i+1).padStart(2,"0")}`);const rs=ks.map(bCalc);const has=ks.map(bHas);
+  const row=(label,f,cls="",isNum)=>`<tr class="${cls}"><td>${label}</td>${rs.map((r,i)=>{if(!has[i])return `<td class="empty">—</td>`;const x=f(r);return `<td class="${x<0?"is-neg":""}">${isNum?(x==null?"—":nf.format(Math.round(x*100)/100)):money(x,1)}</td>`}).join("")}</tr>`;
+  let h=`<thead><tr><th>${year} · al cierre</th>${MESES.map((n,i)=>`<th><button data-bgoto="${i}">${n.slice(0,3)}</button></th>`).join("")}</tr></thead><tbody>`;
+  bStruct.groups.filter(g=>g.sec==="ac"||g.sec==="anc").forEach(g=>h+=row(esc(g.name),r=>r.g[g.id],"ind"));
+  h+=row("Total activo",r=>r.A,"k");
+  bStruct.groups.filter(g=>g.sec==="pc"||g.sec==="pnc").forEach(g=>h+=row(esc(g.name)+(g.sec==="pnc"?" (largo plazo)":""),r=>r.g[g.id],"ind"));
+  h+=row("Total pasivo",r=>r.P,"k");h+=row("Patrimonio neto",r=>r.PN,"k");
+  h+=row("Capital de trabajo",r=>r.ct);h+=row("Liquidez corriente",r=>r.liq,"",true);
+  $("bAnnualTbl").innerHTML=h+"</tbody>"}
+function bRender(){if(bTab==="anual")bRenderAnnual();else bFill()}
+function bShowTab(t){bTab=t;$("bMes").hidden=t!=="mes";$("bAnual").hidden=t!=="anual";$("bTabMes").setAttribute("aria-selected",t==="mes");$("bTabAnual").setAttribute("aria-selected",t==="anual");bRender()}
+$("bTabMes").addEventListener("click",()=>bShowTab("mes"));$("bTabAnual").addEventListener("click",()=>bShowTab("anual"));
+document.addEventListener("input",e=>{const t=e.target;
+  if(t.matches("input.bn")){const lk=t.dataset.bk,v=parseNum(t.value),m=bCur();if(v==null)delete m[lk];else m[lk]=r2(v);bUpdate();bQueueMonth(key())}
+  if(t.matches("input.bname")){const id=t.dataset.id;bStruct.groups.forEach(g=>{if(g.id===id)g.name=t.value;g.lines.forEach(l=>{if(l.id===id)l.name=t.value})});bQueueStruct()}});
+document.addEventListener("focusout",e=>{const t=e.target;if(t.matches("input.bn")){const v=bCur()[t.dataset.bk];t.value=typeof v==="number"?fmtIn(v):""}});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches("input.bn")){e.preventDefault();const all=[...document.querySelectorAll("input.bn")];const i=all.indexOf(e.target);if(all[i+1])all[i+1].focus()}});
+document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.bmk){const m=bCur(),k="mk_"+b.dataset.bmk;const nx=MK[(MK.indexOf(m[k]||"")+1)%MK.length];if(nx)m[k]=nx;else delete m[k];bFill();bQueueMonth(key());return}
+  if(b.dataset.bgoto!=null){month=+b.dataset.bgoto;selChanged();bShowTab("mes");return}
+  if(b.dataset.badd){const nid=p=>p+Math.random().toString(36).slice(2,8);
+    if(b.dataset.badd==="grp"){const sec=b.dataset.sec;let idx=-1;bStruct.groups.forEach((g,i)=>{if(g.sec===sec)idx=i});bStruct.groups.splice(idx+1,0,{id:nid("bg"),name:"Nuevo rubro",sec,lines:[{id:nid("bl"),name:"Nuevo concepto"}]})}
+    else bStruct.groups.find(g=>g.id===b.dataset.g).lines.push({id:nid("bl"),name:"Nuevo concepto"});
+    bBuild();bQueueStruct();return}
+  if(b.dataset.bdel){const id=b.dataset.id;if(b.dataset.bdel==="grp")bStruct.groups=bStruct.groups.filter(g=>g.id!==id);else bStruct.groups.forEach(g=>g.lines=g.lines.filter(l=>l.id!==id));bBuild();bQueueStruct();return}});
+$("bEditBtn").addEventListener("click",()=>{bEditing=!bEditing;$("bEditBtn").classList.toggle("on",bEditing);$("bEditBtn").textContent=bEditing?"Listo":"Editar conceptos";bBuild()});
+function bClearIdle(){$("bClearBox").innerHTML=`<button class="btn" id="bClearBtn">Limpiar plantilla</button>`}
+$("bClearBox").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.id==="bClearBtn"){$("bClearBox").innerHTML=`<span class="confirm">¿Borrar los números de ${MESES[month]} ${year}?<button class="btn danger" id="bClearYes">Sí, borrar</button><button class="btn" id="bClearNo">Cancelar</button></span>`;return}
+  if(b.id==="bClearNo"){bClearIdle();return}
+  if(b.id==="bClearYes"){const k=key();bMonths[k]={};bClearIdle();bFill();bQueueMonth(k)}});
+function bLocal(){try{localStorage.setItem("bal-data",JSON.stringify({bStruct,bMonths}))}catch(e){}}
+function bQueueMonth(k){bLocal()}
+function bQueueStruct(){bLocal()}
+try{const s=JSON.parse(localStorage.getItem("bal-data")||"null");if(s){if(s.bStruct&&Array.isArray(s.bStruct.groups))bStruct=s.bStruct;if(s.bMonths)bMonths=s.bMonths}}catch(e){}
+bBuild();setMode(mode);
+
+})();
+</script>
+
+</body></html>
